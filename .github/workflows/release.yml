@@ -65,6 +65,7 @@ jobs:
         patch -p1 -i ../patches/opencv-${{ env.opencv-version }}-newer-msvc.patch
         patch -p1 -i ../patches/opencv-${{ env.opencv-version }}-fix-windows-arm-arch.patch
         patch -p1 -i ../patches/opencv-${{ env.opencv-version }}-minimal-install.patch
+        patch -p1 -i ../patches/opencv-${{ env.opencv-version }}-cmake-cmp0042-new.patch
         cp ../patches/draw_text.h ../patches/mono_font_data.h modules/core/src/
         cp ../patches/fontface.html ./
         patch -p1 -i ../patches/opencv-${{ env.opencv-version }}-drawing-mono-font.patch
@@ -160,7 +161,7 @@ jobs:
         zip -9 -r opencv-mobile-${{ env.opencv-version }}.zip opencv-mobile-${{ env.opencv-version }}
     - name: opencv4-source
       env:
-        opencv-version: 4.12.0
+        opencv-version: 4.13.0
       run: |
         wget -q https://github.com/opencv/opencv/archive/${{ env.opencv-version }}.zip -O opencv-${{ env.opencv-version }}.zip
         unzip -q opencv-${{ env.opencv-version }}.zip
@@ -247,15 +248,15 @@ jobs:
     - name: upload-opencv4-source
       uses: actions/upload-artifact@v6
       with:
-        name: opencv-mobile-4.12.0-source
-        path: opencv-mobile-4.12.0.zip
+        name: opencv-mobile-4.13.0-source
+        path: opencv-mobile-4.13.0.zip
 
   android:
     needs: [setup]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
         -DCMAKE_POLICY_DEFAULT_CMP0057=NEW \
@@ -357,7 +358,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       OHOS_NDK_CMAKE: $GITHUB_WORKSPACE/ohos-sdk/linux/native/build-tools/cmake/bin/cmake
       COMMON_CMAKE_OPTIONS: |
@@ -418,7 +419,7 @@ jobs:
       if: matrix.opencv-version == '2.4.13.7' || matrix.opencv-version == '3.4.20'
       run: echo "OPENCV_SUBDIR=share/OpenCV" >> $GITHUB_ENV
     - name: set-opencv-dir
-      if: matrix.opencv-version == '4.12.0'
+      if: matrix.opencv-version == '4.13.0'
       run: echo "OPENCV_SUBDIR=lib/cmake/opencv4" >> $GITHUB_ENV
     - name: test-armeabi-v7a
       run: |
@@ -449,12 +450,13 @@ jobs:
 
   ios:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=OS \
         -DDEPLOYMENT_TARGET=$IOS_DEPLOYMENT_TARGET \
@@ -489,6 +491,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -521,12 +532,13 @@ jobs:
 
   ios-simulator:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=SIMULATOR \
         -DDEPLOYMENT_TARGET=$IOS_DEPLOYMENT_TARGET \
@@ -570,6 +582,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -606,7 +627,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
         -DCMAKE_C_FLAGS="-fno-rtti -fno-exceptions" \
@@ -666,7 +687,7 @@ jobs:
       if: matrix.opencv-version == '2.4.13.7' || matrix.opencv-version == '3.4.20'
       run: echo "OPENCV_SUBDIR=share/OpenCV" >> $GITHUB_ENV
     - name: set-opencv-dir
-      if: matrix.opencv-version == '4.12.0'
+      if: matrix.opencv-version == '4.13.0'
       run: echo "OPENCV_SUBDIR=lib/cmake/opencv4" >> $GITHUB_ENV
     - name: test-arm-linux-gnueabi
       run: |
@@ -697,12 +718,13 @@ jobs:
 
   macos:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DDEPLOYMENT_TARGET=$MAC_DEPLOYMENT_TARGET \
         -DENABLE_BITCODE=OFF \
@@ -743,6 +765,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -783,12 +814,13 @@ jobs:
 
   mac-catalyst:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=MAC_CATALYST \
         -DDEPLOYMENT_TARGET=$MAC_CATALYST_DEPLOYMENT_TARGET \
@@ -832,6 +864,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -865,12 +906,13 @@ jobs:
 
   watchos:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=WATCHOS \
         -DDEPLOYMENT_TARGET=$WATCHOS_DEPLOYMENT_TARGET \
@@ -947,12 +989,13 @@ jobs:
 
   watchos-simulator:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=SIMULATOR_WATCHOS \
         -DDEPLOYMENT_TARGET=$WATCHOS_DEPLOYMENT_TARGET \
@@ -996,6 +1039,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -1029,12 +1081,13 @@ jobs:
 
   tvos:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=TVOS \
         -DDEPLOYMENT_TARGET=$TVOS_DEPLOYMENT_TARGET \
@@ -1078,6 +1131,21 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64e/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64e/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64e/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64e/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64e/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64e/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64e/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -1111,12 +1179,13 @@ jobs:
 
   tvos-simulator:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=SIMULATOR_TVOS \
         -DDEPLOYMENT_TARGET=$TVOS_DEPLOYMENT_TARGET \
@@ -1160,6 +1229,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -1193,12 +1271,13 @@ jobs:
 
   visionos:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=VISIONOS \
         -DDEPLOYMENT_TARGET=$VISIONOS_DEPLOYMENT_TARGET \
@@ -1233,6 +1312,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -1265,12 +1353,13 @@ jobs:
 
   visionos-simulator:
     needs: [setup]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_TOOLCHAIN_FILE=../../toolchains/ios.toolchain.cmake \
         -DPLATFORM=SIMULATOR_VISIONOS \
         -DDEPLOYMENT_TARGET=$VISIONOS_DEPLOYMENT_TARGET \
@@ -1314,6 +1403,15 @@ jobs:
         # workaround ar @list issue on macos
         cmake --build . -j 4 || { cd modules/world; $DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libopencv_world.a `cat world_objects.rsp` CMakeFiles/opencv_world.dir/src/world_init.cpp.o; cd ../..; }
         cmake --build . --target install
+    - name: merge-opencv4-3rdparty
+      if: matrix.opencv-version == '4.13.0'
+      run: |
+        libtool -static ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_thread.a \
+            ${{ env.SOURCE_DIR }}/build-arm64/install/lib/opencv4/3rdparty/libkleidicv_hal.a \
+            -o ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a
+        mv ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world_combined.a ${{ env.SOURCE_DIR }}/build-arm64/install/lib/libopencv_world.a
     - name: package
       run: |
         rm -rf opencv2.framework
@@ -1347,14 +1445,15 @@ jobs:
 
   windows:
     needs: [setup]
+    name: "windows-${{ matrix.os-compiler.msvc-version }} (${{ matrix.opencv-version }})"
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
         os-compiler:
-          - { msvc-version: vs2015, windows-version: 2022, toolset-version: v140 }
-          - { msvc-version: vs2017, windows-version: 2022, toolset-version: v141 }
-          - { msvc-version: vs2019, windows-version: 2022, toolset-version: v142 }
-          - { msvc-version: vs2022, windows-version: 2022, toolset-version: v143 }
+          - { msvc-version: vs2015, windows-version: 2022, toolset-version: v140, windows-sdk-version: 22621 }
+          - { msvc-version: vs2017, windows-version: 2022, toolset-version: v141, windows-sdk-version: 22621 }
+          - { msvc-version: vs2019, windows-version: 2022, toolset-version: v142, windows-sdk-version: 22621 }
+          - { msvc-version: vs2022, windows-version: 2022, toolset-version: v143, windows-sdk-version: 26100 }
     runs-on: windows-${{ matrix.os-compiler.windows-version }}
     env:
       UseMultiToolTask: true
@@ -1390,18 +1489,22 @@ jobs:
         $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
         Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe" -ArgumentList "modify --installPath `"$vsInstallPath`" --add Microsoft.VisualStudio.Component.VC.v141.x86.x64 --quiet --norestart --nocache" -Wait
 
+    - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2.4
+      with:
+        sdk-version: ${{ matrix.os-compiler.windows-sdk-version }}
+
     - name: build-x86
       run: |
         cd ${{ env.SOURCE_DIR }}
         mkdir build-x86; cd build-x86
-        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A Win32 $(type ../options.txt) -DBUILD_opencv_world=OFF ..
+        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A Win32,version=10.0.${{ matrix.os-compiler.windows-sdk-version }}.0 $(type ../options.txt) -DBUILD_opencv_world=OFF ..
         cmake --build . --config Release -j 4
         cmake --build . --config Release --target install
     - name: build-x64
       run: |
         cd ${{ env.SOURCE_DIR }}
         mkdir build-x64; cd build-x64
-        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A x64 $(type ../options.txt) -DBUILD_opencv_world=OFF ..
+        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A x64,version=10.0.${{ matrix.os-compiler.windows-sdk-version }}.0 $(type ../options.txt) -DBUILD_opencv_world=OFF ..
         cmake --build . --config Release -j 4
         cmake --build . --config Release --target install
     - name: build-arm64
@@ -1409,7 +1512,7 @@ jobs:
       run: |
         cd ${{ env.SOURCE_DIR }}
         mkdir build-arm64; cd build-arm64
-        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A arm64 -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=ARM64 -DCMAKE_WINDOWS_KITS_10_DIR="C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0" -DCMAKE_SYSTEM_VERSION="10.0.22621.0" $(type ../options.txt) -DBUILD_opencv_world=OFF ..
+        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A arm64,version=10.0.${{ matrix.os-compiler.windows-sdk-version }}.0 -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=ARM64 -DCMAKE_WINDOWS_KITS_10_DIR="C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0" -DCMAKE_SYSTEM_VERSION="10.0.22621.0" $(type ../options.txt) -DBUILD_opencv_world=OFF ..
         cmake --build . --config Release -j 4
         cmake --build . --config Release --target install
     - name: package
@@ -1436,20 +1539,20 @@ jobs:
       run: |
         cd test
         mkdir build-x86; cd build-x86
-        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A Win32 -DOpenCV_DIR="$env:GITHUB_WORKSPACE\${{ env.PACKAGE_NAME }}\x86" -DOpenCV_STATIC=ON ..
+        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A Win32,version=10.0.${{ matrix.os-compiler.windows-sdk-version }}.0 -DOpenCV_DIR="$env:GITHUB_WORKSPACE\${{ env.PACKAGE_NAME }}\x86" -DOpenCV_STATIC=ON ..
         cmake --build . --config Release -j 4
     - name: test-x64
       run: |
         cd test
         mkdir build-x64; cd build-x64
-        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A x64 -DOpenCV_DIR="$env:GITHUB_WORKSPACE\${{ env.PACKAGE_NAME }}\x64" -DOpenCV_STATIC=ON ..
+        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A x64,version=10.0.${{ matrix.os-compiler.windows-sdk-version }}.0 -DOpenCV_DIR="$env:GITHUB_WORKSPACE\${{ env.PACKAGE_NAME }}\x64" -DOpenCV_STATIC=ON ..
         cmake --build . --config Release -j 4
     - name: test-arm64
       if: matrix.os-compiler.msvc-version == 'vs2019' || matrix.os-compiler.msvc-version == 'vs2022'
       run: |
         cd test
         mkdir build-arm64; cd build-arm64
-        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A arm64 -DOpenCV_DIR="$env:GITHUB_WORKSPACE\${{ env.PACKAGE_NAME }}\arm64" -DOpenCV_STATIC=ON ..
+        cmake ${{ env.COMMON_CMAKE_OPTIONS }} -A arm64,version=10.0.${{ matrix.os-compiler.windows-sdk-version }}.0 -DOpenCV_DIR="$env:GITHUB_WORKSPACE\${{ env.PACKAGE_NAME }}\arm64" -DOpenCV_STATIC=ON ..
         cmake --build . --config Release -j 4
     - name: upload-zip
       uses: actions/upload-artifact@v6
@@ -1459,9 +1562,10 @@ jobs:
 
   ubuntu:
     needs: [setup]
+    name: "ubuntu-${{ matrix.os-ubuntu.ubuntu-version }} (${{ matrix.opencv-version }})"
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
         os-ubuntu:
           - { ubuntu-id: 2204, ubuntu-version: 22.04 }
           - { ubuntu-id: 2404, ubuntu-version: 24.04 }
@@ -1496,7 +1600,7 @@ jobs:
       if: matrix.opencv-version == '2.4.13.7' || matrix.opencv-version == '3.4.20'
       run: echo "OPENCV_SUBDIR=share/OpenCV" >> $GITHUB_ENV
     - name: set-opencv-dir
-      if: matrix.opencv-version == '4.12.0'
+      if: matrix.opencv-version == '4.13.0'
       run: echo "OPENCV_SUBDIR=lib/cmake/opencv4" >> $GITHUB_ENV
     - name: test
       run: |
@@ -1515,7 +1619,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     env:
       COMMON_CMAKE_OPTIONS: |
         -DCMAKE_TOOLCHAIN_FILE=../emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
@@ -1601,7 +1705,7 @@ jobs:
       if: matrix.opencv-version == '2.4.13.7' || matrix.opencv-version == '3.4.20'
       run: echo "OPENCV_SUBDIR=share/OpenCV" >> $GITHUB_ENV
     - name: set-opencv-dir
-      if: matrix.opencv-version == '4.12.0'
+      if: matrix.opencv-version == '4.13.0'
       run: echo "OPENCV_SUBDIR=lib/cmake/opencv4" >> $GITHUB_ENV
     - name: test
       run: |
@@ -1647,10 +1751,10 @@ jobs:
 
   apple:
     needs: [macos, ios, ios-simulator, mac-catalyst, watchos, watchos-simulator, tvos, tvos-simulator, visionos, visionos-simulator]
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
-        opencv-version: [2.4.13.7, 3.4.20, 4.12.0]
+        opencv-version: [2.4.13.7, 3.4.20, 4.13.0]
     steps:
     - run: sudo xcode-select --switch /Applications/Xcode_15.2.app
     - uses: actions/checkout@v6
@@ -1751,6 +1855,7 @@ jobs:
 
   devboard:
     needs: [setup]
+    name: "devboard-${{ matrix.name }}"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -1796,6 +1901,32 @@ jobs:
 
           - name: debian-bookworm-aarch64
             os-image: debian:bookworm
+            single-core: false
+            cmake-toolchain: aarch64-linux-gnu.toolchain.cmake
+            setup-toolchain-cmd: |
+              apt-get update
+              apt-get install -y unzip zip patch cmake g++-aarch64-linux-gnu
+            setup-env-cmd: |
+              echo "fine :)"
+            setup-test-env-cmd: |
+              echo "fine :)"
+            cmake-options: -DWITH_KLEIDICV=ON -DWITH_RPI=ON -DWITH_CIX=ON
+
+          - name: debian-trixie-arm
+            os-image: debian:trixie
+            single-core: false
+            cmake-toolchain: arm-linux-gnueabihf.toolchain.cmake
+            setup-toolchain-cmd: |
+              apt-get update
+              apt-get install -y unzip zip patch cmake g++-arm-linux-gnueabihf
+            setup-env-cmd: |
+              echo "fine :)"
+            setup-test-env-cmd: |
+              echo "fine :)"
+            cmake-options:
+
+          - name: debian-trixie-aarch64
+            os-image: debian:trixie
             single-core: false
             cmake-toolchain: aarch64-linux-gnu.toolchain.cmake
             setup-toolchain-cmd: |
@@ -1962,20 +2093,20 @@ jobs:
     - uses: actions/checkout@v6
     - uses: actions/download-artifact@v7
       with:
-        name: opencv-mobile-4.12.0-source
+        name: opencv-mobile-4.13.0-source
     - name: setup-toolchain
       run: ${{ matrix.setup-toolchain-cmd }}
     - name: setup-opencv-source
       run: |
-        unzip -q opencv-mobile-4.12.0.zip
-        echo "SOURCE_DIR=opencv-mobile-4.12.0" >> $GITHUB_ENV
-        echo "PACKAGE_NAME=opencv-mobile-4.12.0-${{ matrix.name }}" >> $GITHUB_ENV
+        unzip -q opencv-mobile-4.13.0.zip
+        echo "SOURCE_DIR=opencv-mobile-4.13.0" >> $GITHUB_ENV
+        echo "PACKAGE_NAME=opencv-mobile-4.13.0-${{ matrix.name }}" >> $GITHUB_ENV
 
     - name: build-disable-thread
       if: ${{ matrix.single-core }}
       run: |
         cd ${{ env.SOURCE_DIR }}
-        patch -p1 -i ../patches/opencv-4.12.0-no-atomic.patch
+        patch -p1 -i ../patches/opencv-4.13.0-no-atomic.patch
         mkdir build && cd build
         ${{ matrix.setup-env-cmd }}
         cmake ${{ env.COMMON_CMAKE_OPTIONS }} ${{ matrix.cmake-options }} \
